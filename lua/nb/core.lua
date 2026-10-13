@@ -187,6 +187,9 @@ function M.commit_and_sync(filepath)
   end
 
   local script = table.concat({
+    -- Vim 終了でパイプが閉じると、git の出力（--quiet でも出る "Created autostash" 等）が
+    -- SIGPIPE になり pull が autostash を戻す前に死ぬため、出力は最初に捨てる
+    "exec </dev/null >/dev/null 2>&1",
     -- 同一 notebook への同期を直列化（VimLeavePre で複数同時起動されても git 操作が競合しないように）
     'lock="$(git rev-parse --git-path nb-sync.lock)" || exit 1',
     -- 異常終了で残ったロックは 10 分で失効させる
@@ -208,6 +211,9 @@ function M.commit_and_sync(filepath)
     "git diff --cached --quiet -- " .. vim.fn.shellescape(filename) .. " || git commit -m " .. vim.fn.shellescape(
       "Edit: " .. filename
     ),
+    -- Vim 外で変更されたファイルも取りこぼさない（nb 本体と同じく notebook 全体をコミット）
+    "git add -A",
+    "git diff --cached --quiet || git commit -m " .. vim.fn.shellescape("Sync: other changes"),
     -- upstream が設定されている場合のみリモート同期
     "if git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then",
     "  if git pull --rebase --autostash --quiet; then",
