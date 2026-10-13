@@ -15,8 +15,9 @@ automatic git commit & remote sync when you close a note.
 - **Add** — create a timestamped note in the current (or any) notebook and
   start writing immediately
 - **Auto commit & sync** — when you save a note and close its buffer (or quit
-  Neovim), the note is committed and synced with the remote
-  (`pull --rebase` + `push`) in a detached background process
+  Neovim), the note — along with any other pending change in the notebook —
+  is committed and synced with the remote (`pull --rebase` + `push`) in a
+  detached background process
 - **Link** — insert `[[wiki-style]]` links to any note, including
   cross-notebook `[[notebook:note]]` links and image links served via
   `nb browse`

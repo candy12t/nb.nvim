@@ -197,8 +197,9 @@ resolve_browse_url({src})                               *nb.resolve_browse_url()
   }
 <
 commit_and_sync({path})                                   *nb.commit_and_sync()*
-  Commit the file in its notebook repository and sync with the remote
-  (`pull --rebase --autostash` + `push`) in a detached background process.
+  Commit the file (and any other pending change) in its notebook repository
+  and sync with the remote (`pull --rebase --autostash` + `push`) in a
+  detached background process.
 
 add_note({title}, {notebook})                                    *nb.add_note()*
   Create a note file and commit it. Returns the new path.
@@ -230,6 +231,9 @@ With `autosync = true` (the default), nb.nvim tracks buffers under the nb
 directory that have been written. When such a buffer is closed — or Neovim
 exits — the note is committed (`Edit: <filename>`) and, if the notebook has
 an upstream, synced via `git pull --rebase --autostash` and `git push`.
+
+Any other pending change in the notebook (files modified or created outside
+Neovim) is committed as well, in a separate `Sync: other changes` commit.
 
 The sync runs detached, so quitting with `:wq` does not interrupt it.
 
