@@ -34,7 +34,8 @@ automatic git commit & remote sync when you close a note.
 
 - Neovim >= 0.10
 - [`nb`](https://github.com/xwmx/nb)
-- [snacks.nvim](https://github.com/folke/snacks.nvim) (picker UI)
+- A picker UI: [snacks.nvim](https://github.com/folke/snacks.nvim) (default)
+  or [fzf-lua](https://github.com/ibhagwan/fzf-lua)
 - [img-clip.nvim](https://github.com/HakonHarnes/img-clip.nvim) *(optional,
   clipboard image import)*
 
@@ -45,7 +46,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 {
   "mozumasu/nb.nvim",
-  dependencies = { "folke/snacks.nvim" },
+  dependencies = { "folke/snacks.nvim" }, -- or "ibhagwan/fzf-lua" with opts.picker = "fzf-lua"
   lazy = false, -- load at startup so autosync autocmds are registered
   opts = {},
   -- stylua: ignore
@@ -78,7 +79,9 @@ require("nb").setup({
   timestamp_format = "%Y%m%d%H%M%S",
   -- drop Marksman "non-existent document" diagnostics for [[notebook:name]] links
   marksman_filter = true,
-  -- custom picker preview: function(ctx) (nil uses snacks' file preview)
+  -- picker backend: "snacks" or "fzf-lua"
+  picker = "snacks",
+  -- custom picker preview: function(ctx) (nil uses snacks' file preview; snacks only)
   preview = nil,
 })
 ```

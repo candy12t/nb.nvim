@@ -4,17 +4,8 @@ local function core()
   return require("nb.core")
 end
 
--- picker 共通プレビュー（setup の preview オプションで差し替え可能）
-local function preview(ctx)
-  local item = ctx.item
-  if item.is_folder or not item.file then
-    return nil
-  end
-  local custom = require("nb.config").options.preview
-  if custom then
-    return custom(ctx)
-  end
-  return require("snacks").picker.preview.file(ctx)
+local function picker()
+  return require("nb.picker")
 end
 
 local function format_note_item(item)
@@ -26,7 +17,11 @@ local function format_note_item(item)
     icon = " 📂"
   end
   local folder_ctx = item.folder_path and (" " .. item.folder_path) or ""
-  return { { prefix .. folder_ctx .. icon .. " " .. item.name } }
+  return prefix .. folder_ctx .. icon .. " " .. item.name
+end
+
+local function format_notebook_item(item)
+  return "📓 " .. item.notebook
 end
 
 -- 現在のファイルが属するノートブックを取得
@@ -37,7 +32,6 @@ end
 -- ノートをタイトル一覧から検索して開く（全ノートブック対応）
 function M.pick()
   local nb = core()
-  local Snacks = require("snacks")
 
   local items = nb.list_all_items()
   if not items or #items == 0 then
@@ -45,52 +39,39 @@ function M.pick()
     return
   end
 
-  Snacks.picker({
+  picker().select({
     title = "nb Notes (All Notebooks)",
     items = items,
     format = format_note_item,
-    preview = preview,
-    confirm = function(picker, item)
-      picker:close()
-      if item and not item.is_folder and item.file then
+    preview = true,
+    confirm = function(item)
+      if not item.is_folder and item.file then
         vim.cmd.edit(item.file)
       end
     end,
     actions = {
-      delete_note = function(picker)
-        local item = picker:current()
-        if item then
-          vim.ui.select({ "Yes", "No" }, {
-            prompt = "Delete: [" .. item.notebook .. "] " .. item.name .. "?",
-          }, function(choice)
-            if choice == "Yes" then
-              if nb.delete_note(item.full_id) then
-                vim.notify("Deleted: " .. item.name, vim.log.levels.INFO)
-                picker:close()
-                M.pick()
-              else
-                vim.notify("Failed to delete", vim.log.levels.ERROR)
-              end
+      -- 削除後は picker を開き直す
+      ["<C-d>"] = function(item)
+        vim.ui.select({ "Yes", "No" }, {
+          prompt = "Delete: [" .. item.notebook .. "] " .. item.name .. "?",
+        }, function(choice)
+          if choice == "Yes" then
+            if nb.delete_note(item.full_id) then
+              vim.notify("Deleted: " .. item.name, vim.log.levels.INFO)
+            else
+              vim.notify("Failed to delete", vim.log.levels.ERROR)
             end
-          end)
-        end
+          end
+          M.pick()
+        end)
       end,
-    },
-    win = {
-      input = {
-        keys = {
-          ["<C-d>"] = { "delete_note", mode = { "n", "i" }, desc = "Delete note" },
-        },
-      },
     },
   })
 end
 
 -- ノートの内容をgrep検索
 function M.grep()
-  require("snacks").picker.grep({
-    dirs = { core().dir() },
-  })
+  picker().grep({ dir = core().dir() })
 end
 
 -- 指定ノートブックにノートを追加して開く
@@ -118,7 +99,6 @@ end
 -- ノートブックを選択してノートを追加
 function M.add_select()
   local nb = core()
-  local Snacks = require("snacks")
   local notebooks = nb.list_notebooks()
   local current_notebook = get_current_notebook()
 
@@ -127,30 +107,26 @@ function M.add_select()
     return
   end
 
+  -- 現在のノートブックを先頭に並べ、Enter だけで選べるようにする
   local items = {}
-  local initial_idx = 1
-  for i, name in ipairs(notebooks) do
-    table.insert(items, { text = name, notebook = name })
+  for _, name in ipairs(notebooks) do
+    local item = { text = name, notebook = name }
     if name == current_notebook then
-      initial_idx = i
+      table.insert(items, 1, item)
+    else
+      table.insert(items, item)
     end
   end
 
-  Snacks.picker({
+  picker().select({
     title = "Select Notebook",
     items = items,
     format = function(item)
       local marker = item.notebook == current_notebook and " (current)" or ""
-      return { { "📓 " .. item.notebook .. marker } }
+      return format_notebook_item(item) .. marker
     end,
-    on_show = function(picker)
-      picker.list:view(initial_idx)
-    end,
-    confirm = function(picker, item)
-      picker:close()
-      if item then
-        add_note_to_notebook(item.notebook)
-      end
+    confirm = function(item)
+      add_note_to_notebook(item.notebook)
     end,
   })
 end
@@ -224,7 +200,6 @@ end
 -- 現在のノートを別のノートブックに移動
 function M.move()
   local nb = core()
-  local Snacks = require("snacks")
   local current_notebook = get_current_notebook()
 
   if not current_notebook then
@@ -256,28 +231,23 @@ function M.move()
     return
   end
 
-  Snacks.picker({
+  picker().select({
     title = "Move to Notebook",
     items = items,
-    format = function(item)
-      return { { "📓 " .. item.notebook } }
-    end,
-    confirm = function(picker, item)
-      picker:close()
-      if item then
-        local result = nb.move_note(current_note_id, item.notebook)
-        if result then
-          -- 移動後のパスを直接構築して開く
-          local new_path = nb.dir() .. "/" .. item.notebook .. "/" .. filename
-          if vim.fn.filereadable(new_path) == 1 then
-            vim.cmd.edit(new_path)
-            vim.notify("Moved to " .. item.notebook, vim.log.levels.INFO)
-          else
-            vim.notify("Moved but could not open new location", vim.log.levels.WARN)
-          end
+    format = format_notebook_item,
+    confirm = function(item)
+      local result = nb.move_note(current_note_id, item.notebook)
+      if result then
+        -- 移動後のパスを直接構築して開く
+        local new_path = nb.dir() .. "/" .. item.notebook .. "/" .. filename
+        if vim.fn.filereadable(new_path) == 1 then
+          vim.cmd.edit(new_path)
+          vim.notify("Moved to " .. item.notebook, vim.log.levels.INFO)
         else
-          vim.notify("Failed to move note", vim.log.levels.ERROR)
+          vim.notify("Moved but could not open new location", vim.log.levels.WARN)
         end
+      else
+        vim.notify("Failed to move note", vim.log.levels.ERROR)
       end
     end,
   })
@@ -286,7 +256,6 @@ end
 -- リンクを挿入（全ノートブック対応）
 function M.link()
   local nb = core()
-  local Snacks = require("snacks")
   local current_notebook = get_current_notebook()
   local current_folder = nb.folder_of(vim.fn.expand("%:p"))
 
@@ -296,34 +265,31 @@ function M.link()
     return
   end
 
-  Snacks.picker({
+  picker().select({
     title = "nb Link (All Notebooks)",
     items = items,
     format = format_note_item,
-    preview = preview,
-    confirm = function(picker, item)
-      picker:close()
-      if item then
-        local link
-        local path
-        -- 異なるノートブックの場合は notebook:name 形式
-        local needs_prefix = current_notebook and item.notebook ~= current_notebook
-        if item.is_image then
-          if needs_prefix then
-            path = nb.browse_url(item.notebook, item.name, item.folder_path)
-          else
-            path = nb.relative_path(current_folder, item.folder_path, item.name)
-          end
-          link = string.format("![%s](<%s>)", item.name, path)
+    preview = true,
+    confirm = function(item)
+      local link
+      local path
+      -- 異なるノートブックの場合は notebook:name 形式
+      local needs_prefix = current_notebook and item.notebook ~= current_notebook
+      if item.is_image then
+        if needs_prefix then
+          path = nb.browse_url(item.notebook, item.name, item.folder_path)
         else
-          if needs_prefix then
-            link = string.format("[[%s:%s]]", item.notebook, item.name)
-          else
-            link = string.format("[[%s]]", item.name)
-          end
+          path = nb.relative_path(current_folder, item.folder_path, item.name)
         end
-        vim.api.nvim_put({ link }, "c", true, true)
+        link = string.format("![%s](<%s>)", item.name, path)
+      else
+        if needs_prefix then
+          link = string.format("[[%s:%s]]", item.notebook, item.name)
+        else
+          link = string.format("[[%s]]", item.name)
+        end
       end
+      vim.api.nvim_put({ link }, "c", true, true)
     end,
   })
 end
@@ -331,7 +297,6 @@ end
 -- 現在のバッファのファイルを nb 配下の notebook へ移動（外部ファイルの取り込み）
 function M.adopt_buffer()
   local nb = core()
-  local Snacks = require("snacks")
 
   local current_file = vim.fn.expand("%:p")
   if current_file == "" or not vim.uv.fs_stat(current_file) then
@@ -360,17 +325,11 @@ function M.adopt_buffer()
     table.insert(items, { text = name, notebook = name })
   end
 
-  Snacks.picker({
+  picker().select({
     title = "Adopt to Notebook",
     items = items,
-    format = function(item)
-      return { { "📓 " .. item.notebook } }
-    end,
-    confirm = function(picker, item)
-      picker:close()
-      if not item then
-        return
-      end
+    format = format_notebook_item,
+    confirm = function(item)
       vim.ui.input({ prompt = "Title (empty to keep filename): " }, function(title)
         if title == nil then
           return -- cancelled

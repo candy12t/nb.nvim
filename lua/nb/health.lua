@@ -35,10 +35,15 @@ function M.check()
     )
   end
 
-  if pcall(require, "snacks") then
-    health.ok("snacks.nvim found")
+  local _, picker_err = require("nb.picker").resolve()
+  if picker_err then
+    health.error(picker_err, {
+      'Set opts.picker to "snacks" or "fzf-lua" and install it:',
+      "https://github.com/folke/snacks.nvim",
+      "https://github.com/ibhagwan/fzf-lua",
+    })
   else
-    health.error("snacks.nvim not found (required for pickers)", "https://github.com/folke/snacks.nvim")
+    health.ok("picker: " .. require("nb.config").options.picker)
   end
 
   if pcall(require, "img-clip.clipboard") then

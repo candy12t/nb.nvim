@@ -11,7 +11,9 @@ M.defaults = {
   timestamp_format = "%Y%m%d%H%M%S",
   -- Marksman の診断から [[notebook:name]] リンクへの誤検知を除外する
   marksman_filter = true,
-  -- picker のカスタムプレビュー関数 function(ctx) （nil なら snacks のファイルプレビュー）
+  -- picker のバックエンド（"snacks" | "fzf-lua"）
+  picker = "snacks",
+  -- picker のカスタムプレビュー関数 function(ctx) （nil なら snacks のファイルプレビュー。snacks のときのみ有効）
   preview = nil,
 }
 
